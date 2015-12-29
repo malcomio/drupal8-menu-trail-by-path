@@ -7,15 +7,13 @@
 namespace Drupal\menu_trail_by_path;
 
 use Drupal\Core\Menu\MenuActiveTrail;
-use Drupal\Core\Menu\MenuLinkTree;
-use Drupal\Core\Menu\MenuLinkTreeElement;
 use Drupal\Core\Menu\MenuTreeParameters;
-use Drupal\Core\Cache\CacheableMetadata;
 
 /**
  * Overrides the class for the file entity normalizer from HAL.
  */
 class MenuTrailByPathActiveTrail extends MenuActiveTrail {
+
 
   /**
    * Helper method for ::getActiveTrailIds().
@@ -44,9 +42,11 @@ class MenuTrailByPathActiveTrail extends MenuActiveTrail {
         $menu_path = $menu_url->toString();
 
         // Check if this item's path exists in the current path.
-        if (strpos($path, $menu_path) === 0) {
+        // Also check if there is a langcode prefix.
+        $lang_prefix = '/' . \Drupal::languageManager()->getCurrentLanguage()->getId();
+        if (strpos($path, $menu_path) === 0 || strpos($lang_prefix . $path, $menu_path) === 0) {
 
-          if ($this->pathIsMoreSimilar($item_path, $found)) {
+          if ($this->pathIsMoreSimilar($path, $menu_path)) {
             $parents = array($menu_link_route => $menu_link_route);
             $active_trail = $parents + $active_trail;
           }
@@ -79,11 +79,17 @@ class MenuTrailByPathActiveTrail extends MenuActiveTrail {
    */
   private function getSimilarityWithCurrentPath($path) {
     $alias = $this->getCurrentPathAlias();
-    $key = 0;
-    while (isset($alias[$key]) && isset($path[$key]) && $alias[$key] === $path[$key]) {
-      $key++;
+    // In case of identity the similarity is trivial.
+    if ($path === $alias) {
+      return strlen($path);
     }
-    return $key;
+    else {
+      $key = 0;
+      while (isset($alias[$key]) && isset($path[$key]) && $alias[$key] === $path[$key]) {
+        $key++;
+      }
+      return $key;
+    }
   }
 
   /**
@@ -99,12 +105,8 @@ class MenuTrailByPathActiveTrail extends MenuActiveTrail {
    */
   private function pathIsMoreSimilar($item_path, $active) {
 
-    // There is no currently active path, so
-    if (empty($active)) {
-      return TRUE;
-    }
-
-    if ($this->getSimilarityWithCurrentPath($item_path) > $this->getSimilarityWithCurrentPath($active['url']->toString())) {
+    // If there is no active menu path or compared path is a better match than active menu path
+    if (empty($active) || $this->getSimilarityWithCurrentPath($item_path) > $this->getSimilarityWithCurrentPath($active)) {
       return TRUE;
     }
 
